@@ -4,6 +4,7 @@ mod conn;
 use irc::conn::NetStream;
 use cmd::{IrcMsg, IrcMessage};
 use protocol::ServerProtocol;
+use conf::Config;
 
 use encoding::{DecoderTrap, EncoderTrap, Encoding};
 use encoding::label::encoding_from_whatwg_label;
@@ -16,24 +17,30 @@ use std::io::ErrorKind;
 
 pub struct IrcStream<T: ServerProtocol> {
     stream: BufStream<NetStream>,
-    protocol_handler: T
+    protocol_handler: T,
+    config: Config
 }
 
 impl<T: ServerProtocol> IrcStream<T> {
-    pub fn new(server: &str, port: u16, phandler: T) -> Result<IrcStream<T>> {
-        let socket = NetStream::PlainNetStream(try!(TcpStream::connect(&format!("{}:{}", server, port)[..])));
-        Ok(IrcStream { stream: BufStream::new(socket), protocol_handler: phandler })
+    pub fn new(conf: Config, phandler: T) -> Result<IrcStream<T>> {
+        let socket = NetStream::PlainNetStream(try!(TcpStream::connect(
+            &format!("{}:{}", conf.get_uplink_addr(), conf.get_uplink_port())[..])));
+
+        Ok(IrcStream { stream: BufStream::new(socket), protocol_handler: phandler, config: conf })
     }
 
-    pub fn introduce(&mut self, pass: &str, name: &str, numeric: u16, desc: &str) -> Result<()> {
-        let intro_msg = &self.protocol_handler.introduce_msg(pass, name, numeric, desc)[..];
+    pub fn introduce(&mut self) -> Result<()> {
+        let intro_msg = &self.protocol_handler.introduce_msg(self.config.get_link_passwd(),
+                                                             self.config.get_server_name(),
+                                                             self.config.get_numeric(),
+                                                             self.config.get_description())[..];
         self.send_msg(intro_msg)
     }
 
-    pub fn recv_msg(&mut self, encoding: &str) -> Result<IrcMessage> {
+    pub fn recv_msg(&mut self) -> Result<IrcMessage> {
         let mut line = String::new();
         //self.read_line(&mut line).and_then(|_| Ok(IrcMsg::from_str(&line[..])))
-        self.read_line(encoding, &mut line).and_then(|_| {
+        self.read_line(&mut line).and_then(|_| {
             let msg = IrcMsg::from_str(&line[..]);
             if msg.is_err() {
                 return Ok(msg);
@@ -51,11 +58,12 @@ impl<T: ServerProtocol> IrcStream<T> {
     }
 
     // TODO Proper logging
-    fn read_line(&mut self, encoding: &str, buff: &mut String) -> Result<()> {
-        let encoding = match encoding_from_whatwg_label(encoding) {
+    fn read_line(&mut self, buff: &mut String) -> Result<()> {
+        let charset = &self.config.get_encoding()[..];
+        let encoding = match encoding_from_whatwg_label(charset) {
             Some(enc) => enc,
             None => return Err(IoError::new(ErrorKind::InvalidInput, "Failed to find decoder.",
-                                            Some(format!("Invalid decoder: {}", encoding))))
+                                            Some(format!("Invalid decoder: {}", charset))))
         };
 
         let mut buf = Vec::new();

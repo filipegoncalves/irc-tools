@@ -54,30 +54,26 @@ fn main() {
         Err(e) => { println!("conf error: {}", e.description()); return () }
     };
 
-    let mut ircstream = match IrcStream::new(config.get_uplink_addr(), config.get_uplink_port(),
-                                             Unreal) {
+    let mut ircstream = match IrcStream::new(config, Unreal) {
         Ok(stream) => stream,
         Err(_) => { println!("connection error"); return () }
     }; 
 
-    match ircstream.introduce(config.get_link_passwd(),
-                              config.get_server_name(),
-                              config.get_numeric(),
-                              config.get_description()) {
+    match ircstream.introduce() {
         Ok(_) => (),
         Err(_) => { println!("introduce() failed"); return () }
     }
 
-    enter_main_loop(config, ircstream);
+    enter_main_loop(ircstream);
 }
 
 fn load_config(file_path: &str) -> Result<Config> {
     Config::load(&Path::new(file_path))
 }
 
-fn enter_main_loop<T: ServerProtocol>(config: Config, mut ircstream: IrcStream<T>) {
+fn enter_main_loop<T: ServerProtocol>(mut ircstream: IrcStream<T>) {
     loop {
-        match ircstream.recv_msg(config.get_encoding()) {
+        match ircstream.recv_msg() {
             Ok(unparsed_msg) => {
                 if let Ok(irc_msg) = unparsed_msg {
                     match &irc_msg.command[..] {
