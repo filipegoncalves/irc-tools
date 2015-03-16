@@ -2,22 +2,23 @@
 pub mod unreal;
 
 use cmd::IrcMsg;
+use conf::Config;
 
 pub trait ServerProtocol {
 
     type IRCd;
 
-    fn introduce_msg(&self, passwd: &str, name: &str, numeric: u16, desc: &str) -> String;
+    fn introduce_msg(&self, config: &Config) -> String;
 
-    fn handle_internal(&self, msg: &IrcMsg) -> Option<String> {
+    fn handle(&self, config: &Config, msg: &IrcMsg) -> Option<String> {
         match &msg.command[..] {
-            "PING" => self.handle_ping_internal(msg),
+            "PING" => self.handle_ping(config, msg),
             _ => None
         }
     }
 
     // TODO Hardcoded server names
-    fn handle_ping_internal(&self, msg: &IrcMsg) -> Option<String> {
+    fn handle_ping(&self, config: &Config, msg: &IrcMsg) -> Option<String> {
         if msg.params.len() < 1 {
             println!("Invalid PING command, missing parameters.");
             return None;

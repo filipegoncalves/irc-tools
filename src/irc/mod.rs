@@ -30,10 +30,7 @@ impl<T: ServerProtocol> IrcStream<T> {
     }
 
     pub fn introduce(&mut self) -> Result<()> {
-        let intro_msg = &self.protocol_handler.introduce_msg(self.config.get_link_passwd(),
-                                                             self.config.get_server_name(),
-                                                             self.config.get_numeric(),
-                                                             self.config.get_description())[..];
+        let intro_msg = &self.protocol_handler.introduce_msg(&self.config)[..];
         self.send_msg(intro_msg)
     }
 
@@ -45,7 +42,7 @@ impl<T: ServerProtocol> IrcStream<T> {
             if msg.is_err() {
                 return Ok(msg);
             }
-            if let Some(reply) = self.protocol_handler.handle_internal(msg.as_ref().unwrap()) {
+            if let Some(reply) = self.protocol_handler.handle(&self.config, msg.as_ref().unwrap()) {
                 self.send_msg(&reply[..]).and_then(|_| Ok(msg))
             } else {
                 Ok(msg)
