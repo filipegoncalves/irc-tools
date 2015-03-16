@@ -17,18 +17,18 @@ pub trait ServerProtocol {
         }
     }
 
-    // TODO Hardcoded server names
     fn handle_ping(&self, config: &Config, msg: &IrcMsg) -> Option<String> {
         if msg.params.len() < 1 {
-            println!("Invalid PING command, missing parameters.");
+            println!("Invalid PING, missing parameters.");
             return None;
         }
-        if msg.params.len() >= 2 && &msg.params[1][..] != "RustPower.MindForge.org" {
-            println!("Invalid PING command, I am not a hub.");
+        if msg.params.len() >= 2 && &msg.params[1][..] != config.get_server_name() {
+            println!("Invalid PING, I am not a hub: PING {} :{}",
+                     &msg.params[0][..], &msg.params[1][..]);
             return None;
         }
-        let mut reply = "PONG RustPower.MindForge.org".to_string();
-        if msg.params[0] != "Ping.MindForge.org" {
+        let mut reply = format!("PONG {}", config.get_server_name());
+        if msg.params[0] != config.get_uplink_name() {
             reply.push_str(" :");
             reply.push_str(&msg.params[0]);
         }

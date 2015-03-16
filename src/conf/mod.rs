@@ -14,6 +14,7 @@ pub struct Config {
     numeric: u16,
     description: String,
     uplink: String,
+    uplinkname: String,
     port: Option<u16>,
     password: String,
     use_ssl: bool,
@@ -48,6 +49,10 @@ impl Config {
 
     pub fn get_uplink_addr(&self) -> &str {
         &self.uplink[..]
+    }
+
+    pub fn get_uplink_name(&self) -> &str {
+        &self.uplinkname[..]
     }
 
     pub fn get_uplink_port(&self) -> u16 {
