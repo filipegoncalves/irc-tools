@@ -46,11 +46,13 @@ impl<T: ServerProtocol> IrcStream<T> {
             match self.protocol_handler.handle(&self.config, msg.as_ref().unwrap()) {
                 Ok(Some(reply)) => self.send_msg(&reply[..]).and_then(|_| Ok(msg)),
                 Err(e)  => {
-                    if e.kind != ProtoErrorKind::Fatal {
-                        println!("Non fatal error"); Ok(msg) // TODO better error handling
+                    println!("{}", e);
+                    if e.kind == ProtoErrorKind::Fatal {
+                        Err(IoError::new(ErrorKind::InvalidInput, e.desc, e.detail))
                     } else {
-                        println!("Fatal error"); Ok(msg) // TODO drop socket; return error
-                    }}
+                        Ok(msg)
+                    }
+                }
                 _ => Ok(msg)
             }})
     }

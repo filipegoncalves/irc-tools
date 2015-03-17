@@ -63,14 +63,14 @@ impl ServerProtocol for Unreal {
     fn handle_generic(&mut self, config: &Config, msg: &IrcMsg) ->
         Result<Option<String>, ProtocolError> {
             match &msg.command[..] {
-                "PROTOCTL" => self.handle_protoctl(config, msg),
+                "PROTOCTL" => self.handle_protoctl(msg),
                 _ => Ok(None)
             }
         }
 }
 
 impl Unreal {
-    fn handle_protoctl(&mut self, config: &Config, msg: &IrcMsg) ->
+    fn handle_protoctl(&mut self, msg: &IrcMsg) ->
         Result<Option<String>, ProtocolError> {
             if self.synced {
                 return Err(ProtocolError::new(ProtoErrorKind::InvalidContext,

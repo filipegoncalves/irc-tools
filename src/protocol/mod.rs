@@ -4,10 +4,13 @@ pub mod unreal;
 use cmd::IrcMsg;
 use conf::Config;
 
+use std::fmt::{Display, Formatter};
+use std::fmt::Result as FmtResult;
+
 /// A list of possible error types in the server-to-server protocol
 /// Any error that is not `Fatal` will yield a warning but keep the
 /// link active. `Fatal` errors drop the connection to the server.
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum ProtoErrorKind {
     /// Command is missing one or more required parameters
     /// Example: receiving PRIVMSG with 0 parameters
@@ -60,15 +63,14 @@ pub trait ServerProtocol {
                                                        &msg.params[0][..], 
                                                        &msg.params[1][..]))));
         }
-        let mut reply = format!("PONG {}", config.get_server_name());
         if msg.params[0] != config.get_uplink_name() {
-            reply.push_str(" :");
-            reply.push_str(&msg.params[0][..]);
+            Ok(Some(format!("PONG {} :{}\r\n", config.get_server_name(), &msg.params[0][..])))
+        } else {
+            Ok(Some(format!("PONG :{}\r\n", config.get_server_name())))
         }
-        reply.push_str("\r\n");
-        Ok(Some(reply))
     }
 
+    #[allow(unused_variables)]
     fn handle_generic(&mut self, config: &Config, msg: &IrcMsg) ->
         Result<Option<String>, ProtocolError> {
         Ok(None)
@@ -78,5 +80,14 @@ pub trait ServerProtocol {
 impl ProtocolError {
     fn new(errtype: ProtoErrorKind, descr: &'static str, details: Option<String>) -> ProtocolError {
         ProtocolError { kind: errtype, desc: descr, detail: details }
+    }
+}
+
+impl Display for ProtocolError {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        write!(f, "[PROTOCOL ERROR] ({:?}): {} ({})",
+               self.kind,
+               self.desc,
+               self.detail.as_ref().map_or("no details", |d| &d[..]))
     }
 }
