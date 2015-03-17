@@ -54,7 +54,7 @@ fn main() {
         Err(e) => { println!("conf error: {}", e.description()); return () }
     };
 
-    let mut ircstream = match IrcStream::new(config, Unreal) {
+    let mut ircstream = match IrcStream::new(config, Unreal::new()) {
         Ok(stream) => stream,
         Err(_) => { println!("connection error"); return () }
     }; 

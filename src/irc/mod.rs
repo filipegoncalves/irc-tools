@@ -4,6 +4,7 @@ mod conn;
 use irc::conn::NetStream;
 use cmd::{IrcMsg, IrcMessage};
 use protocol::ServerProtocol;
+use protocol::ProtoErrorKind;
 use conf::Config;
 
 use encoding::{DecoderTrap, EncoderTrap, Encoding};
@@ -42,12 +43,16 @@ impl<T: ServerProtocol> IrcStream<T> {
             if msg.is_err() {
                 return Ok(msg);
             }
-            if let Some(reply) = self.protocol_handler.handle(&self.config, msg.as_ref().unwrap()) {
-                self.send_msg(&reply[..]).and_then(|_| Ok(msg))
-            } else {
-                Ok(msg)
-            }
-        })
+            match self.protocol_handler.handle(&self.config, msg.as_ref().unwrap()) {
+                Ok(Some(reply)) => self.send_msg(&reply[..]).and_then(|_| Ok(msg)),
+                Err(e)  => {
+                    if e.kind != ProtoErrorKind::Fatal {
+                        println!("Non fatal error"); Ok(msg) // TODO better error handling
+                    } else {
+                        println!("Fatal error"); Ok(msg) // TODO drop socket; return error
+                    }}
+                _ => Ok(msg)
+            }})
     }
         
     pub fn send_msg(&mut self, msg: &str) -> Result<()> {
@@ -56,7 +61,7 @@ impl<T: ServerProtocol> IrcStream<T> {
 
     // TODO Proper logging
     fn read_line(&mut self, buff: &mut String) -> Result<()> {
-        let charset = &self.config.get_encoding()[..];
+        let charset = self.config.get_encoding();
         let encoding = match encoding_from_whatwg_label(charset) {
             Some(enc) => enc,
             None => return Err(IoError::new(ErrorKind::InvalidInput, "Failed to find decoder.",
@@ -77,9 +82,23 @@ impl<T: ServerProtocol> IrcStream<T> {
         //    |_| { print!("[RAW INPUT]: {}", buff); Ok::<(), _>(()) })
     }
 
-    // TODO Proper logging
     fn write_line(&mut self, msg: &str) -> Result<()> {
-        try!(self.stream.write_all(msg.as_bytes()));
+        let charset = self.config.get_encoding();
+        let encoding = match encoding_from_whatwg_label(charset) {
+            Some(enc) => enc,
+            None => return Err(IoError::new(ErrorKind::InvalidInput, "Failed to find encoder.",
+                                            Some(format!("Invalid encoder: {}", charset))))
+        };
+
+        let data = match encoding.encode(msg, EncoderTrap::Replace) {
+            Ok(data) => data,
+            Err(data) => return Err(IoError::new(ErrorKind::InvalidInput,
+                                                 "Failed to encode message.",
+                                                 Some(format!("Failed to encode {} as {}.",
+                                                              data, encoding.name()))))
+        };
+
+        try!(self.stream.write_all(&data));
         self.stream.flush().and_then(|_| { print!("[RAW OUTPUT]: {}", msg); Ok::<(), _>(()) })
     }
 }

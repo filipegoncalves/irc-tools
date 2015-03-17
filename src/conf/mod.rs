@@ -17,6 +17,7 @@ pub struct Config {
     uplinkname: String,
     port: Option<u16>,
     password: String,
+    pass_receive: String,
     use_ssl: bool,
     encoding: String,
     options: HashMap<String, String>
@@ -61,6 +62,10 @@ impl Config {
 
     pub fn get_link_passwd(&self) -> &str {
         &self.password[..]
+    }
+
+    pub fn get_passwd_receive(&self) -> &str {
+        &self.pass_receive[..]
     }
 
     pub fn get_encoding(&self) -> &str {
