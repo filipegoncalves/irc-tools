@@ -60,7 +60,7 @@ impl ServerProtocol for Unreal {
         }
     }
 
-    fn handle_generic(&self, config: &Config, msg: &IrcMsg) ->
+    fn handle_generic(&mut self, config: &Config, msg: &IrcMsg) ->
         Result<Option<String>, ProtocolError> {
             match &msg.command[..] {
                 "PROTOCTL" => self.handle_protoctl(config, msg),
@@ -70,9 +70,8 @@ impl ServerProtocol for Unreal {
 }
 
 impl Unreal {
-    fn handle_protoctl(&self, config: &Config, msg: &IrcMsg) ->
+    fn handle_protoctl(&mut self, config: &Config, msg: &IrcMsg) ->
         Result<Option<String>, ProtocolError> {
-/*
             if self.synced {
                 return Err(ProtocolError::new(ProtoErrorKind::InvalidContext,
                                               "Got PROTOCTL on an already-established link",
@@ -98,7 +97,6 @@ impl Unreal {
                     _ => ()
                 }
             }
-*/
             Ok(None)
     }
 }

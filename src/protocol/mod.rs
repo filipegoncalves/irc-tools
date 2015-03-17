@@ -37,7 +37,7 @@ pub trait ServerProtocol {
 
     fn introduce_msg(&self, config: &Config) -> String;
 
-    fn handle(&self, config: &Config, msg: &IrcMsg) -> Result<Option<String>, ProtocolError> {
+    fn handle(&mut self, config: &Config, msg: &IrcMsg) -> Result<Option<String>, ProtocolError> {
         match &msg.command[..] {
             "PING" => self.handle_ping(config, msg),
             "PASS" => self.handle_pass(config, msg),
@@ -69,7 +69,7 @@ pub trait ServerProtocol {
         Ok(Some(reply))
     }
 
-    fn handle_generic(&self, config: &Config, msg: &IrcMsg) ->
+    fn handle_generic(&mut self, config: &Config, msg: &IrcMsg) ->
         Result<Option<String>, ProtocolError> {
         Ok(None)
     }
