@@ -10,11 +10,17 @@ use conf::Config;
 use encoding::{DecoderTrap, EncoderTrap, Encoding};
 use encoding::label::encoding_from_whatwg_label;
 
+#[cfg(feature = "ssl")] use openssl::ssl::{SslStream, SslMethod, SslContext};
+#[cfg(feature = "ssl")] use openssl::ssl::error::SslError;
+#[cfg(feature = "ssl")] use std::result::Result as StdResult;
+
 use std::io::{BufStream, BufRead, Result, Write};
-use std::net::TcpStream;
-use std::str::FromStr;
 use std::io::Error as IoError;
 use std::io::ErrorKind;
+use std::net::TcpStream;
+use std::str::FromStr;
+use std::error::Error;
+use std::borrow::ToOwned;
 
 pub struct IrcStream<T: ServerProtocol> {
     stream: BufStream<NetStream>,
@@ -24,6 +30,31 @@ pub struct IrcStream<T: ServerProtocol> {
 
 impl<T: ServerProtocol> IrcStream<T> {
     pub fn new(conf: Config, phandler: T) -> Result<IrcStream<T>> {
+        if conf.use_ssl() {
+            IrcStream::new_ssl_stream(conf, phandler)
+        } else {
+            IrcStream::new_plain_stream(conf, phandler)
+        }
+    }
+
+    #[cfg(feature = "ssl")]
+    fn new_ssl_stream(conf: Config, phandler: T) -> Result<IrcStream<T>> {
+        let socket = try!(TcpStream::connect(
+            &format!("{}:{}", conf.get_uplink_addr(), conf.get_uplink_port())[..]));
+        let ssl_ctx = try!(ssl_to_io(SslContext::new(SslMethod::Tlsv1)));
+        let ssl_socket = try!(ssl_to_io(SslStream::new(&ssl_ctx, socket)));
+        Ok(IrcStream {
+            stream: BufStream::new(NetStream::SecureNetStream(ssl_socket)),
+            protocol_handler: phandler,
+            config: conf })
+    }
+
+    #[cfg(not(feature = "ssl"))]
+    fn new_ssl_stream(conf: Config, phandler: T) -> Result<IrcStream<T>> {
+        panic!("SSL support was not compiled, but use_ssl is set to 'yes'. Please recompile with ssl support by enabling the feature 'ssl'");
+    }
+
+    fn new_plain_stream(conf: Config, phandler: T) -> Result<IrcStream<T>> {
         let socket = NetStream::PlainNetStream(try!(TcpStream::connect(
             &format!("{}:{}", conf.get_uplink_addr(), conf.get_uplink_port())[..])));
 
@@ -37,7 +68,6 @@ impl<T: ServerProtocol> IrcStream<T> {
 
     pub fn recv_msg(&mut self) -> Result<IrcMessage> {
         let mut line = String::new();
-        //self.read_line(&mut line).and_then(|_| Ok(IrcMsg::from_str(&line[..])))
         self.read_line(&mut line).and_then(|_| {
             let msg = IrcMsg::from_str(&line[..]);
             if msg.is_err() {
@@ -79,9 +109,6 @@ impl<T: ServerProtocol> IrcStream<T> {
                                                         encoding.name()))))
             }
         })
-
-        //self.stream.read_line(buff).and_then(
-        //    |_| { print!("[RAW INPUT]: {}", buff); Ok::<(), _>(()) })
     }
 
     fn write_line(&mut self, msg: &str) -> Result<()> {
@@ -102,5 +129,15 @@ impl<T: ServerProtocol> IrcStream<T> {
 
         try!(self.stream.write_all(&data));
         self.stream.flush().and_then(|_| { print!("[RAW OUTPUT]: {}", msg); Ok::<(), _>(()) })
+    }
+}
+
+/// Converts a Result<U, SslError> into a Result<U>.
+#[cfg(feature = "ssl")]
+fn ssl_to_io<U>(res: StdResult<U, SslError>) -> Result<U> {
+    match res {
+        Ok(x) => Ok(x),
+        Err(e) => Err(IoError::new(ErrorKind::Other, "An SSL error occurred.",
+                                   Some(e.description().to_owned()))),
     }
 }

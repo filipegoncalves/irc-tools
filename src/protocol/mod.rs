@@ -21,6 +21,9 @@ pub enum ProtoErrorKind {
     /// A command that cannot / was not expected in this context.
     /// Example: receiving PASS when the link is already established.
     InvalidContext,
+    /// Protocol version mismatch
+    /// Example: Uplink runs UnrealIRCd with another protocol version
+    ProtocolVMismatch,
     /// A fatal error that will cause the link to be terminated
     /// Example: Wrong link password / wrong server name
     Fatal
@@ -69,6 +72,8 @@ pub trait ServerProtocol {
             Ok(Some(format!("PONG :{}\r\n", config.get_server_name())))
         }
     }
+
+    fn handle_server(&self, config: &Config, msg: &IrcMsg) -> Result<Option<String>, ProtocolError>;
 
     #[allow(unused_variables)]
     fn handle_generic(&mut self, config: &Config, msg: &IrcMsg) ->

@@ -4,6 +4,14 @@ name = "irctools"
 version = "0.0.1"
 authors = ["Filipe Gonçalves <filipe@codinghighway.com>"]
 
+[features]
+default = ["ssl"]
+ssl = ["openssl"]
+
 [dependencies]
 rustc-serialize = "0.3"
 encoding = "0.2.25"
+
+[dependencies.openssl]
+openssl = "~0.2.17"
+optional = true

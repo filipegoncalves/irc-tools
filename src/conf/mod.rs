@@ -5,6 +5,7 @@ use std::io::{Error, ErrorKind};
 use std::io::Result;
 use std::io::Read;
 use std::error::Error as StdError;
+use std::path::Path;
 use rustc_serialize::json::decode;
 
 /// Configuration data.
@@ -71,4 +72,10 @@ impl Config {
     pub fn get_encoding(&self) -> &str {
         &self.encoding[..]
     }
+
+    pub fn use_ssl(&self) -> bool {
+        self.use_ssl
+    }
+
+    //pub fn get_option(&self) -> Option<
 }

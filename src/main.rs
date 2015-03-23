@@ -1,11 +1,10 @@
 #![feature(io)]
-#![feature(net)]
-#![feature(fs)]
 #![feature(core)]
-#![feature(old_path)]
 
 extern crate "rustc-serialize" as rustc_serialize;
 extern crate encoding;
+#[cfg(feature = "ssl")]
+extern crate openssl;
 
 mod irc;
 mod cmd;
@@ -15,10 +14,11 @@ mod protocol;
 use irc::IrcStream;
 use conf::Config;
 use std::io::Result;
+use std::path::Path;
+use std::error::Error;
 
 use protocol::unreal::Unreal;
 use protocol::ServerProtocol;
-
 
 /*
 [RAW INPUT]: PASS :rustp0w3r!
@@ -51,7 +51,10 @@ fn main() {
 
     let config = match load_config("tools.conf") {
         Ok(cfg) => cfg,
-        Err(e) => { println!("conf error: {}", e.description()); return () }
+        // An ugly hack to get around this warning:
+        // use of deprecated item: use the Error trait's description method instead, #[warn(deprecated)] on by default
+        // std::io::Error will go away at some point; when it does, make it e.description() again
+        Err(e) => { println!("conf error: {}", (&e as &Error).description()); return () }
     };
 
     let mut ircstream = match IrcStream::new(config, Unreal::new()) {
@@ -86,7 +89,7 @@ fn enter_main_loop<T: ServerProtocol>(mut ircstream: IrcStream<T>) {
                 }
             }
             Err(e) => {
-                println!("Connection reset by peer: {}", e.description());
+                println!("Connection reset by peer: {}", (&e as &Error).description());
                 break;
             }
         }
