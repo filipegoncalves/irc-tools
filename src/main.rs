@@ -5,6 +5,7 @@ extern crate "rustc-serialize" as rustc_serialize;
 extern crate encoding;
 #[cfg(feature = "ssl")]
 extern crate openssl;
+extern crate time;
 
 mod irc;
 mod cmd;

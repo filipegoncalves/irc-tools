@@ -11,6 +11,7 @@ ssl = ["openssl"]
 [dependencies]
 rustc-serialize = "0.3"
 encoding = "0.2.25"
+time = "~0.1.21"
 
 [dependencies.openssl]
 openssl = "~0.2.17"

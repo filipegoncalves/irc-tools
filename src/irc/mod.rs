@@ -61,6 +61,14 @@ impl<T: ServerProtocol> IrcStream<T> {
         Ok(IrcStream { stream: BufStream::new(socket), protocol_handler: phandler, config: conf })
     }
 
+    pub fn get_conf(&self) -> &Config {
+        &self.config
+    }
+
+    pub fn get_phandler(&self) -> &T {
+        &self.protocol_handler
+    }
+
     pub fn introduce(&mut self) -> Result<()> {
         let intro_msg = &self.protocol_handler.introduce_msg(&self.config)[..];
         self.send_msg(intro_msg)

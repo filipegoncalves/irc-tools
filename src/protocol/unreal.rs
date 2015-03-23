@@ -4,25 +4,44 @@ use protocol::ServerProtocol;
 use conf::Config;
 use cmd::IrcMsg;
 use protocol::{ProtoErrorKind, ProtocolError};
+use protocol::IrcClientType;
 
-/// This module implements Unreal protocol version 2311 (Unreal 3.2.10)
+use time;
 
-// TODO Review compile-flags sent to uplink
-// TODO Change design to communicate "drop link"?
+/// This module targets Unreal protocol version 2311 (Unreal 3.2.10)
+
+// TODO Review compile-flags sent to uplink (think about sending SSL?)
+// TODO NICKIP
+// TODO Check nick against NICKCHARS in introduce_client()
 
 static PROTOVERSION: &'static str = "U2311";
 static COMPILEFLAGS: &'static str = "Ooe";
+static DEF_USR_MODES: &'static str = "+i";
+static DEF_SERVICE_MODES: &'static str = "+ioSq";
 
 #[derive(Default)]
 pub struct Unreal {
+    /// Are we synced?
     synced: bool,
-    vhp: bool, // When introducing a user, send his cloaked host as if it were a vhost.
-    umode2: bool, // Supports the UMODE2 command, a shortened version of MODE for usermode changes.
-    vl: bool, // Supports V:Line information. Extends SERVER to include deny version{} blocks.
-    sjoin: bool, // Supports SJOIN version 1 which is no longer in use. Use with SJ3.
-    sjoin2: bool, // Supports SJOIN version 2 which is no longer in use. Use with SJ3.
-    sj3: bool, // Supports SJOIN version 3.
-    tkl: bool, // Supports exntended TKL messages for spamfilter support.
+    /// When introducing a user, send his cloaked host as if it were a vhost.
+    vhp: bool,
+    /// Supports the UMODE2 command, a shortened version of MODE for usermode changes.
+    umode2: bool,
+    /// Supports V:Line information. Extends SERVER to include deny version{} blocks.
+    vl: bool,
+    /// Supports SJOIN version 1 which is no longer in use. Use with SJ3.
+    sjoin: bool,
+    /// Supports SJOIN version 2 which is no longer in use. Use with SJ3.
+    sjoin2: bool,
+    /// Supports SJOIN version 3.
+    sj3: bool,
+    /// Supports exntended TKL messages for spamfilter support.
+    tkl: bool,
+    /// Use extended NICK message for introducing users.
+    nickv2: bool,
+    /// Adds an IP parameter to the NICK message, which is the base64 encoding of the user's
+    /// ip address (in network byte order). Requires NICKv2.
+    nickip: bool
 }
 
 impl ServerProtocol for Unreal {
@@ -36,10 +55,35 @@ impl ServerProtocol for Unreal {
     /// Generates the introduce msg to an Unreal uplink.
     fn introduce_msg(&self, config: &Config) -> String {
         format!(concat!("PASS :{}\r\n",
-                        "PROTOCTL VHP UMODE2 VL SJOIN SJOIN2 SJ3 TKLEXT\r\n",
+                        "PROTOCTL VHP UMODE2 VL SJOIN SJOIN2 SJ3 TKLEXT NICKv2 NICKIP\r\n",
                         "SERVER {} 1 :{}-{}-{} {}\r\n"),
                 config.get_link_passwd(), config.get_server_name(), PROTOVERSION, COMPILEFLAGS,
                 config.get_numeric(), config.get_description())
+    }
+
+    /// Generates a client introduce msg
+    /// There are two types of clients: regular clients and services.
+    fn introduce_client_msg(&self, conf: &Config, ctype: IrcClientType,
+                            nick: &str, ident: &str, host: &str, gecos: &str) -> String {
+
+        let mut msg = format!("NICK {} 1 {} {} {} {} 0", nick, time::get_time().sec, ident, host,
+                              conf.get_server_name());
+
+        if self.nickv2 {
+            let umodes = match ctype {
+                IrcClientType::Regular => DEF_USR_MODES,
+                IrcClientType::Service => DEF_SERVICE_MODES
+            };
+            msg.push_str(&format!(" {} {}", umodes, host)[..]);
+            if self.nickip {
+                // TODO Do not hardcode IP
+                msg.push_str(" fwAAAQ==");
+            }
+        }
+
+        msg.push_str(&format!(" :{}", gecos)[..]);
+
+        msg
     }
 
     fn handle_pass(&self, config: &Config, msg: &IrcMsg) -> Result<Option<String>, ProtocolError> {
@@ -130,6 +174,8 @@ impl Unreal {
                     "SJOIN2" => self.sjoin2 = true,
                     "SJ3" => self.sj3 = true,
                     "TKL" => self.tkl = true,
+                    "NICKv2" => self.nickv2 = true,
+                    "NICKIP" => self.nickip = true,
                     _ => ()
                 }
             }
@@ -146,7 +192,20 @@ impl Unreal {
                                        None))
             } else {
                 self.synced = true;
-                Ok(Some(format!("EOS\r\n")))
+                // TODO Some sort of OnSync()
+                let mut cbot_intro = self.introduce_client_msg(config, IrcClientType::Service,
+                                                               config.get_cbot_nick(),
+                                                               config.get_cbot_ident(),
+                                                               config.get_cbot_host(),
+                                                               config.get_cbot_gecos());
+
+                cbot_intro.push_str("\r\n");
+
+                for chan in config.get_cbot_chans() {
+                    cbot_intro.push_str(&format!(":{} JOIN {}\r\n", config.get_cbot_nick(), chan))
+                }
+
+                Ok(Some(format!("{}EOS\r\n", cbot_intro)))
             }
         } else {
             Ok(None)

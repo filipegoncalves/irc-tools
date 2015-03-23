@@ -1,4 +1,4 @@
-use std::borrow::ToOwned;
+use std::borrow::{Borrow, ToOwned};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Error, ErrorKind};
@@ -21,6 +21,11 @@ pub struct Config {
     pass_receive: String,
     use_ssl: bool,
     encoding: String,
+    cbot_nick: String,
+    cbot_ident: String,
+    cbot_host: String,
+    cbot_gecos: String,
+    cbot_chans: Vec<String>,
     options: HashMap<String, String>
 }
 
@@ -57,8 +62,14 @@ impl Config {
         &self.uplinkname[..]
     }
 
+    #[cfg(not(feature = "ssl"))]
     pub fn get_uplink_port(&self) -> u16 {
         self.port.unwrap_or(6667)
+    }
+
+    #[cfg(feature = "ssl")]
+    pub fn get_uplink_port(&self) -> u16 {
+        self.port.unwrap_or(6697)
     }
 
     pub fn get_link_passwd(&self) -> &str {
@@ -77,5 +88,24 @@ impl Config {
         self.use_ssl
     }
 
+    pub fn get_cbot_nick(&self) -> &str {
+        &self.cbot_nick[..]
+    }
+
+    pub fn get_cbot_ident(&self) -> &str {
+        &self.cbot_ident[..]
+    }
+
+    pub fn get_cbot_host(&self) -> &str {
+        &self.cbot_host[..]
+    }
+
+    pub fn get_cbot_gecos(&self) -> &str {
+        &self.cbot_gecos[..]
+    }
+
+    pub fn get_cbot_chans(&self) -> &[String] {
+        self.cbot_chans.borrow()
+    }
     //pub fn get_option(&self) -> Option<
 }

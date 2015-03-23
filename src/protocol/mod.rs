@@ -35,6 +35,11 @@ pub struct ProtocolError {
     pub detail: Option<String>
 }
 
+pub enum IrcClientType {
+    Regular,
+    Service
+}
+
 pub trait ServerProtocol {
 
     type IRCd;
@@ -42,6 +47,9 @@ pub trait ServerProtocol {
     fn new() -> Self;
 
     fn introduce_msg(&self, config: &Config) -> String;
+
+    fn introduce_client_msg(&self, conf: &Config, ctype: IrcClientType,
+                            nick: &str, ident: &str, host: &str, gecos: &str) -> String;
 
     fn handle(&mut self, config: &Config, msg: &IrcMsg) -> Result<Option<String>, ProtocolError> {
         match &msg.command[..] {
