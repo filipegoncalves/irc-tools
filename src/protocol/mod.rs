@@ -6,6 +6,8 @@ use conf::Config;
 
 use std::fmt::{Display, Formatter};
 use std::fmt::Result as FmtResult;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 /// A list of possible error types in the server-to-server protocol
 /// Any error that is not `Fatal` will yield a warning but keep the
@@ -44,47 +46,31 @@ pub trait ServerProtocol {
 
     type IRCd;
 
-    fn new() -> Self;
+    fn new(config: Rc<RefCell<Config>>) -> Self;
 
-    fn introduce_msg(&self, config: &Config) -> String;
+    fn introduce_msg(&self) -> String;
 
-    fn introduce_client_msg(&self, conf: &Config, ctype: IrcClientType,
+    fn introduce_client_msg(&self, ctype: IrcClientType,
                             nick: &str, ident: &str, host: &str, gecos: &str) -> String;
 
-    fn handle(&mut self, config: &Config, msg: &IrcMsg) -> Result<Option<String>, ProtocolError> {
+    fn handle(&mut self, msg: &IrcMsg) -> Result<Option<String>, ProtocolError> {
         match &msg.command[..] {
-            "PING" => self.handle_ping(config, msg),
-            "PASS" => self.handle_pass(config, msg),
-            _ => self.handle_generic(config, msg)
+            "PING" => self.handle_ping(msg),
+            "PASS" => self.handle_pass(msg),
+            _ => self.handle_generic(msg)
         }
     }
 
-    fn handle_pass(&self, config: &Config, msg: &IrcMsg) -> Result<Option<String>, ProtocolError>;
+    fn handle_pass(&self, msg: &IrcMsg) -> Result<Option<String>, ProtocolError>;
 
-    fn handle_ping(&self, config: &Config, msg: &IrcMsg) -> Result<Option<String>, ProtocolError> {
-        if msg.params.len() < 1 {
-            return Err(ProtocolError::new(ProtoErrorKind::MissingParameter,
-                                          "No parameters found; expected at least 1.",
-                                          Some(format!("PING with no parameters"))));
-        }
-        if msg.params.len() >= 2 && &msg.params[1][..] != config.get_server_name() {
-            return Err(ProtocolError::new(ProtoErrorKind::InvalidParameter,
-                                          "Request to act as a hub",
-                                          Some(format!("PING {} :{}",
-                                                       &msg.params[0][..], 
-                                                       &msg.params[1][..]))));
-        }
-        if msg.params[0] != config.get_uplink_name() {
-            Ok(Some(format!("PONG {} :{}\r\n", config.get_server_name(), &msg.params[0][..])))
-        } else {
-            Ok(Some(format!("PONG :{}\r\n", config.get_server_name())))
-        }
-    }
+    // TODO
+    // When Rust supports struct inheritance, move handle_ping back here
+    fn handle_ping(&self, msg: &IrcMsg) -> Result<Option<String>, ProtocolError>;
 
-    fn handle_server(&self, config: &Config, msg: &IrcMsg) -> Result<Option<String>, ProtocolError>;
+    fn handle_server(&self, msg: &IrcMsg) -> Result<Option<String>, ProtocolError>;
 
     #[allow(unused_variables)]
-    fn handle_generic(&mut self, config: &Config, msg: &IrcMsg) ->
+    fn handle_generic(&mut self, msg: &IrcMsg) ->
         Result<Option<String>, ProtocolError> {
         Ok(None)
     }

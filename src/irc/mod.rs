@@ -72,7 +72,7 @@ impl<T: ServerProtocol> IrcStream<T> {
     }
 
     pub fn introduce(&self) -> Result<()> {
-        let intro_msg = &self.protocol_handler.borrow().introduce_msg(&*self.config.borrow())[..];
+        let intro_msg = &self.protocol_handler.borrow().introduce_msg()[..];
         self.send_msg(intro_msg)
     }
 
@@ -83,7 +83,7 @@ impl<T: ServerProtocol> IrcStream<T> {
             if msg.is_err() {
                 return Ok(msg);
             }
-            match self.protocol_handler.borrow_mut().handle(&*self.config.borrow(), msg.as_ref().unwrap()) {
+            match self.protocol_handler.borrow_mut().handle(msg.as_ref().unwrap()) {
                 Ok(Some(reply)) => self.send_msg(&reply[..]).and_then(|_| Ok(msg)),
                 Err(e)  => {
                     println!("{}", e);

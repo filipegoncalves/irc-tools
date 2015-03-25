@@ -63,7 +63,7 @@ fn main() {
     }));
 
     // TODO Do not hardcode protocol handler
-    let ircstream = match IrcStream::new(config.clone(), Unreal::new()) {
+    let ircstream = match IrcStream::new(config.clone(), Unreal::new(config.clone())) {
         Ok(stream) => stream,
         Err(_) => { println!("connection error"); return () }
     }; 

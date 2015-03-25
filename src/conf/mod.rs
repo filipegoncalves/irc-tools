@@ -9,7 +9,7 @@ use std::path::Path;
 use rustc_serialize::json::decode;
 
 /// Configuration data.
-#[derive(RustcDecodable)]
+#[derive(RustcDecodable, Default)]
 pub struct Config {
     servname: String,
     numeric: u16,
