@@ -44,7 +44,7 @@ pub enum IrcClientType {
 
 pub trait ServerProtocol {
 
-    type IRCd;
+    //type IRCd;
 
     fn new(config: Rc<RefCell<Config>>) -> Self;
 

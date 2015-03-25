@@ -23,29 +23,8 @@ use std::cell::RefCell;
 use protocol::unreal::Unreal;
 use protocol::ServerProtocol;
 
-/*
-[RAW INPUT]: PASS :rustp0w3r!
-[RAW INPUT]: PROTOCTL NOQUIT TOKEN NICKv2 SJOIN SJOIN2 UMODE2 VL SJ3 NS SJB64 TKLEXT NICKIP ESVID
-[RAW INPUT]: PROTOCTL CHANMODES=beI,kfL,lj,psmntirRcOAQKVCuzNSMTGZ NICKCHARS= MLOCK
-[RAW INPUT]: SERVER Ping.MindForge.org 1 :U2311-Fhin6XeOoEm-191 Ping? Pong!
-[RAW INPUT]: :Ping.MindForge.org SMO o :(link) Link Ping.MindForge.org -> RustPower.MindForge.org[@0:0:0:0:0:ffff:85.241.8.245.60416] established
-[RAW INPUT]: :Ping.MindForge.org SERVER SanFrancisco.MindForge.org 2 :Oh, California!
-[RAW INPUT]: :SanFrancisco.MindForge.org EOS
-[RAW INPUT]: :Ping.MindForge.org SERVER tools.MindForge.org 2 :MindForge Tools
-[RAW INPUT]: :tools.MindForge.org EOS
-[RAW INPUT]: :Ping.MindForge.org SERVER Ocean.MindForge.org 2 :Kitties can't swim
-[RAW INPUT]: :Ocean.MindForge.org EOS
-[RAW INPUT]: :Ping.MindForge.org SERVER services.MindForge.org 1 :MindForge IRC Services
-[RAW INPUT]: :services.MindForge.org EOS
-[RAW INPUT]: NICK eMuleChansDrop 2 1425754439 eMule Bot.MindForge.org tools.MindForge.org MFTooL :eMule Chans Auto Drop
-[RAW INPUT]: :eMuleChansDrop MODE eMuleChansDrop :+iorSq
-[RAW INPUT]: :eMuleChansDrop JOIN #ServicesLog
-[RAW INPUT]: NICK MFTooL 2 1425754439 TooL MindForge.org tools.MindForge.org MFTooL :MindForge Security Tool
-*/
-
-
-//TODO deal with case-sensitiveness
-// TODO Encoding
+// TODO deal with case-sensitiveness?
+// TODO Disconnect / netsplit / reconnect and resync
 
 fn main() {
 
@@ -81,8 +60,8 @@ fn load_config(file_path: &str) -> Result<Config> {
 }
 
 fn enter_main_loop<T: ServerProtocol>(ircstream: IrcStream<T>) {
-    loop {
-        match ircstream.recv_msg() {
+    for message in ircstream.iter() {
+        match message {
             Ok(unparsed_msg) => {
                 if let Ok(irc_msg) = unparsed_msg {
                     match &irc_msg.command[..] {
@@ -98,6 +77,6 @@ fn enter_main_loop<T: ServerProtocol>(ircstream: IrcStream<T>) {
                 println!("Connection reset by peer: {}", (&e as &Error).description());
                 break;
             }
-        }
+        }        
     }
 }

@@ -50,7 +50,7 @@ pub struct Unreal {
 
 impl ServerProtocol for Unreal {
 
-    type IRCd = Unreal;
+    //type IRCd = Unreal;
 
     fn new(config: Rc<RefCell<Config>>) -> Self {
         Unreal { conf: config.clone(), synced: false, ..Default::default() }

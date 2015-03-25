@@ -25,12 +25,16 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 pub struct IrcStream<T: ServerProtocol> {
-    stream: RefCell<BufStream<NetStream>>,
+    stream: Rc<RefCell<BufStream<NetStream>>>,
     protocol_handler: RefCell<T>,
     config: Rc<RefCell<Config>>
 }
 
-impl<T: ServerProtocol> IrcStream<T> {
+pub struct IrcStreamIterator<'a, T: 'a + ServerProtocol> {
+    ircstream: &'a IrcStream<T>
+}
+
+impl<'a, T: 'a + ServerProtocol> IrcStream<T> {
     pub fn new(conf: Rc<RefCell<Config>>, phandler: T) -> Result<IrcStream<T>> {
         let ssl = conf.borrow().use_ssl();
         if ssl {
@@ -38,6 +42,10 @@ impl<T: ServerProtocol> IrcStream<T> {
         } else {
             IrcStream::new_plain_stream(conf, phandler)
         }
+    }
+
+    pub fn iter(&'a self) -> IrcStreamIterator<'a, T> {
+        IrcStreamIterator::new(self)
     }
 
     #[cfg(feature = "ssl")]
@@ -49,7 +57,7 @@ impl<T: ServerProtocol> IrcStream<T> {
         let ssl_socket = try!(ssl_to_io(SslStream::new(&ssl_ctx, socket)));
 
         Ok(IrcStream {
-            stream: RefCell::new(BufStream::new(NetStream::SecureNetStream(ssl_socket))),
+            stream: Rc::new(RefCell::new(BufStream::new(NetStream::SecureNetStream(ssl_socket)))),
             protocol_handler: RefCell::new(phandler),
             config: conf })
     }
@@ -66,7 +74,7 @@ impl<T: ServerProtocol> IrcStream<T> {
                      conf.borrow().get_uplink_port())[..])));
 
         Ok(IrcStream {
-            stream: RefCell::new(BufStream::new(socket)),
+            stream: Rc::new(RefCell::new(BufStream::new(socket))),
             protocol_handler: RefCell::new(phandler),
             config: conf })
     }
@@ -142,6 +150,20 @@ impl<T: ServerProtocol> IrcStream<T> {
                                                         encoding.name()))))
             }
         })
+    }
+}
+
+impl<'a, T: 'a + ServerProtocol> IrcStreamIterator<'a, T> {
+    pub fn new(istream: &'a IrcStream<T>) -> IrcStreamIterator<T> {
+        IrcStreamIterator { ircstream: istream }
+    }
+}
+
+impl<'a, T: ServerProtocol + 'a> Iterator for IrcStreamIterator<'a, T> {
+    type Item = Result<IrcMessage>;
+
+    fn next(&mut self) -> Option<Result<IrcMessage>> {
+        Some(self.ircstream.recv_msg())
     }
 }
 
