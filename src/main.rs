@@ -17,6 +17,8 @@ use conf::Config;
 use std::io::Result;
 use std::path::Path;
 use std::error::Error;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 use protocol::unreal::Unreal;
 use protocol::ServerProtocol;
@@ -48,17 +50,20 @@ use protocol::ServerProtocol;
 fn main() {
 
     // TODO make cmd-line option to pass conf file path
-    // TODO Do not handle errors silently
+    // TODO Better and more descriptive error handling
 
-    let config = match load_config("tools.conf") {
+    let config = Rc::new(RefCell::new(match load_config("tools.conf") {
         Ok(cfg) => cfg,
-        // An ugly hack to get around this warning:
+        // An ugly hack to get around the following warning:
+        // --
         // use of deprecated item: use the Error trait's description method instead, #[warn(deprecated)] on by default
+        //--
         // std::io::Error will go away at some point; when it does, make it e.description() again
-        Err(e) => { println!("conf error: {}", (&e as &Error).description()); return () }
-    };
+        Err(e) => { println!("ERROR loading conf: {}", (&e as &Error).description()); return () }
+    }));
 
-    let mut ircstream = match IrcStream::new(config, Unreal::new()) {
+    // TODO Do not hardcode protocol handler
+    let ircstream = match IrcStream::new(config.clone(), Unreal::new()) {
         Ok(stream) => stream,
         Err(_) => { println!("connection error"); return () }
     }; 
@@ -75,7 +80,7 @@ fn load_config(file_path: &str) -> Result<Config> {
     Config::load(&Path::new(file_path))
 }
 
-fn enter_main_loop<T: ServerProtocol>(mut ircstream: IrcStream<T>) {
+fn enter_main_loop<T: ServerProtocol>(ircstream: IrcStream<T>) {
     loop {
         match ircstream.recv_msg() {
             Ok(unparsed_msg) => {

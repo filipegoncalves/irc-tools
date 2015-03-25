@@ -21,16 +21,19 @@ use std::net::TcpStream;
 use std::str::FromStr;
 use std::error::Error;
 use std::borrow::ToOwned;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 pub struct IrcStream<T: ServerProtocol> {
-    stream: BufStream<NetStream>,
-    protocol_handler: T,
-    config: Config
+    stream: RefCell<BufStream<NetStream>>,
+    protocol_handler: RefCell<T>,
+    config: Rc<RefCell<Config>>
 }
 
 impl<T: ServerProtocol> IrcStream<T> {
-    pub fn new(conf: Config, phandler: T) -> Result<IrcStream<T>> {
-        if conf.use_ssl() {
+    pub fn new(conf: Rc<RefCell<Config>>, phandler: T) -> Result<IrcStream<T>> {
+        let ssl = conf.borrow().use_ssl();
+        if ssl {
             IrcStream::new_ssl_stream(conf, phandler)
         } else {
             IrcStream::new_plain_stream(conf, phandler)
@@ -38,50 +41,49 @@ impl<T: ServerProtocol> IrcStream<T> {
     }
 
     #[cfg(feature = "ssl")]
-    fn new_ssl_stream(conf: Config, phandler: T) -> Result<IrcStream<T>> {
-        let socket = try!(TcpStream::connect(
-            &format!("{}:{}", conf.get_uplink_addr(), conf.get_uplink_port())[..]));
+    fn new_ssl_stream(conf: Rc<RefCell<Config>>, phandler: T) -> Result<IrcStream<T>> {
+        let socket = try!(TcpStream::connect(&format!("{}:{}",
+                                                      conf.borrow().get_uplink_addr(),
+                                                      conf.borrow().get_uplink_port())[..]));
         let ssl_ctx = try!(ssl_to_io(SslContext::new(SslMethod::Tlsv1)));
         let ssl_socket = try!(ssl_to_io(SslStream::new(&ssl_ctx, socket)));
+
         Ok(IrcStream {
-            stream: BufStream::new(NetStream::SecureNetStream(ssl_socket)),
-            protocol_handler: phandler,
+            stream: RefCell::new(BufStream::new(NetStream::SecureNetStream(ssl_socket))),
+            protocol_handler: RefCell::new(phandler),
             config: conf })
     }
 
     #[cfg(not(feature = "ssl"))]
-    fn new_ssl_stream(conf: Config, phandler: T) -> Result<IrcStream<T>> {
+    fn new_ssl_stream(conf: Rc<RefCell<Config>>, phandler: T) -> Result<IrcStream<T>> {
         panic!("SSL support was not compiled, but use_ssl is set to 'yes'. Please recompile with ssl support by enabling the feature 'ssl'");
     }
 
-    fn new_plain_stream(conf: Config, phandler: T) -> Result<IrcStream<T>> {
+    fn new_plain_stream(conf: Rc<RefCell<Config>>, phandler: T) -> Result<IrcStream<T>> {
         let socket = NetStream::PlainNetStream(try!(TcpStream::connect(
-            &format!("{}:{}", conf.get_uplink_addr(), conf.get_uplink_port())[..])));
+            &format!("{}:{}",
+                     conf.borrow().get_uplink_addr(),
+                     conf.borrow().get_uplink_port())[..])));
 
-        Ok(IrcStream { stream: BufStream::new(socket), protocol_handler: phandler, config: conf })
+        Ok(IrcStream {
+            stream: RefCell::new(BufStream::new(socket)),
+            protocol_handler: RefCell::new(phandler),
+            config: conf })
     }
 
-    pub fn get_conf(&self) -> &Config {
-        &self.config
-    }
-
-    pub fn get_phandler(&self) -> &T {
-        &self.protocol_handler
-    }
-
-    pub fn introduce(&mut self) -> Result<()> {
-        let intro_msg = &self.protocol_handler.introduce_msg(&self.config)[..];
+    pub fn introduce(&self) -> Result<()> {
+        let intro_msg = &self.protocol_handler.borrow().introduce_msg(&*self.config.borrow())[..];
         self.send_msg(intro_msg)
     }
 
-    pub fn recv_msg(&mut self) -> Result<IrcMessage> {
+    pub fn recv_msg(&self) -> Result<IrcMessage> {
         let mut line = String::new();
         self.read_line(&mut line).and_then(|_| {
             let msg = IrcMsg::from_str(&line[..]);
             if msg.is_err() {
                 return Ok(msg);
             }
-            match self.protocol_handler.handle(&self.config, msg.as_ref().unwrap()) {
+            match self.protocol_handler.borrow_mut().handle(&*self.config.borrow(), msg.as_ref().unwrap()) {
                 Ok(Some(reply)) => self.send_msg(&reply[..]).and_then(|_| Ok(msg)),
                 Err(e)  => {
                     println!("{}", e);
@@ -95,32 +97,13 @@ impl<T: ServerProtocol> IrcStream<T> {
             }})
     }
         
-    pub fn send_msg(&mut self, msg: &str) -> Result<()> {
+    pub fn send_msg(&self, msg: &str) -> Result<()> {
         self.write_line(msg)
     }
 
-    // TODO Proper logging
-    fn read_line(&mut self, buff: &mut String) -> Result<()> {
-        let charset = self.config.get_encoding();
-        let encoding = match encoding_from_whatwg_label(charset) {
-            Some(enc) => enc,
-            None => return Err(IoError::new(ErrorKind::InvalidInput, "Failed to find decoder.",
-                                            Some(format!("Invalid decoder: {}", charset))))
-        };
-
-        let mut buf = Vec::new();
-        self.stream.read_until(b'\n', &mut buf).and_then(|_| {
-            match encoding.decode(&buf, DecoderTrap::Replace) {
-                Ok(data) => { *buff = data; print!("[RAW INPUT]: {}", buff); Ok::<(), _>(()) },
-                Err(e) => Err(IoError::new(ErrorKind::InvalidInput, "Failed to decode message.",
-                                           Some(format!("Failed to decode {} as {}.", e,
-                                                        encoding.name()))))
-            }
-        })
-    }
-
-    fn write_line(&mut self, msg: &str) -> Result<()> {
-        let charset = self.config.get_encoding();
+    fn write_line(&self, msg: &str) -> Result<()> {
+        let borrowed = self.config.borrow();
+        let charset = borrowed.get_encoding();
         let encoding = match encoding_from_whatwg_label(charset) {
             Some(enc) => enc,
             None => return Err(IoError::new(ErrorKind::InvalidInput, "Failed to find encoder.",
@@ -135,8 +118,30 @@ impl<T: ServerProtocol> IrcStream<T> {
                                                               data, encoding.name()))))
         };
 
-        try!(self.stream.write_all(&data));
-        self.stream.flush().and_then(|_| { print!("[RAW OUTPUT]: {}", msg); Ok::<(), _>(()) })
+        try!(self.stream.borrow_mut().write_all(&data));
+        self.stream.borrow_mut().flush().and_then(
+            |_| { print!("[RAW OUTPUT]: {}", msg); Ok::<(), _>(()) })
+    }
+
+    // TODO Proper logging
+    fn read_line(&self, buff: &mut String) -> Result<()> {
+        let borrowed = self.config.borrow();
+        let charset = borrowed.get_encoding();
+        let encoding = match encoding_from_whatwg_label(charset) {
+            Some(enc) => enc,
+            None => return Err(IoError::new(ErrorKind::InvalidInput, "Failed to find decoder.",
+                                            Some(format!("Invalid decoder: {}", charset))))
+        };
+
+        let mut buf = Vec::new();
+        self.stream.borrow_mut().read_until(b'\n', &mut buf).and_then(|_| {
+            match encoding.decode(&buf, DecoderTrap::Replace) {
+                Ok(data) => { *buff = data; print!("[RAW INPUT]: {}", buff); Ok::<(), _>(()) },
+                Err(e) => Err(IoError::new(ErrorKind::InvalidInput, "Failed to decode message.",
+                                           Some(format!("Failed to decode {} as {}.", e,
+                                                        encoding.name()))))
+            }
+        })
     }
 }
 
